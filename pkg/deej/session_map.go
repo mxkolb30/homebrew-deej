@@ -117,6 +117,14 @@ func (m *sessionMap) getAndAddSessions() error {
 		}
 	}
 
+	// Direct terminal output for debugging
+	fmt.Fprintf(os.Stderr, "[DEBUG] Registered audio sessions:\n")
+	m.lock.Lock()
+	for key := range m.sessions {
+		fmt.Fprintf(os.Stderr, "  - %s\n", key)
+	}
+	m.lock.Unlock()
+
 	m.logger.Infow("Got all audio sessions successfully", "sessionMap", m)
 
 	return nil
@@ -235,6 +243,12 @@ func (m *sessionMap) handleSliderMoveEvent(event SliderMoveEvent) {
 		// for each resolved target...
 		for _, resolvedTarget := range resolvedTargets {
 
+			m.logger.Debugw("Slider move event: checking for session match",
+				"sliderID", event.SliderID,
+				"percent", event.PercentValue,
+				"configTarget", target,
+				"resolvedTarget", resolvedTarget)
+
 			// check the map for matching sessions
 			sessions, ok := m.get(resolvedTarget)
 
@@ -244,6 +258,10 @@ func (m *sessionMap) handleSliderMoveEvent(event SliderMoveEvent) {
 			}
 
 			targetFound = true
+
+			m.logger.Debugw("Slider move event: found matching sessions",
+				"target", resolvedTarget,
+				"count", len(sessions))
 
 			// iterate all matching sessions and adjust the volume of each one
 			for _, session := range sessions {

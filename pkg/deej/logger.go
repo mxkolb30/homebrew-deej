@@ -20,10 +20,10 @@ const (
 )
 
 // NewLogger provides a logger instance for the whole program
-func NewLogger(buildType string) (*zap.SugaredLogger, error) {
+func NewLogger(buildType string, verbose bool) (*zap.SugaredLogger, error) {
 	var loggerConfig zap.Config
 
-	// release: info and above, log to file only (no UI)
+	// release: log to file
 	if buildType == buildTypeRelease {
 		if err := util.EnsureDirExists(logDirectory); err != nil {
 			return nil, fmt.Errorf("ensure log directory exists: %w", err)
@@ -33,6 +33,12 @@ func NewLogger(buildType string) (*zap.SugaredLogger, error) {
 
 		loggerConfig.OutputPaths = []string{filepath.Join(logDirectory, logFilename)}
 		loggerConfig.Encoding = "console"
+
+		// if verbose, set level to debug and also log to stdout
+		if verbose {
+			loggerConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+			loggerConfig.OutputPaths = append(loggerConfig.OutputPaths, "stdout")
+		}
 
 		// development: debug and above, log to stderr only, colorful
 	} else {

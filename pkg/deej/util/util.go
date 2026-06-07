@@ -36,6 +36,16 @@ func Linux() bool {
 	return runtime.GOOS == "linux"
 }
 
+// GetHomeDir returns the user's home directory
+func GetHomeDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "."
+	}
+
+	return home
+}
+
 // SetupCloseHandler creates a 'listener' on a new goroutine which will notify the
 // program if it receives an interrupt from the OS
 func SetupCloseHandler() chan os.Signal {

@@ -85,6 +85,11 @@ func NewConfig(logger *zap.SugaredLogger, notifier Notifier) (*CanonicalConfig, 
 	userConfig.SetConfigType(configType)
 	userConfig.AddConfigPath(userConfigPath)
 
+	// on linux, also look in ~/.config/deej
+	if util.Linux() {
+		userConfig.AddConfigPath(path.Join(util.GetHomeDir(), ".config", "deej"))
+	}
+
 	userConfig.SetDefault(configKeySliderMapping, map[string][]string{})
 	userConfig.SetDefault(configKeyInvertSliders, false)
 	userConfig.SetDefault(configKeyCOMPort, defaultCOMPort)
@@ -105,31 +110,32 @@ func NewConfig(logger *zap.SugaredLogger, notifier Notifier) (*CanonicalConfig, 
 
 // Load reads deej's config files from disk and tries to parse them
 func (cc *CanonicalConfig) Load() error {
-	cc.logger.Debugw("Loading config", "path", userConfigFilepath)
-
-	// make sure it exists
-	if !util.FileExists(userConfigFilepath) {
-		cc.logger.Warnw("Config file not found", "path", userConfigFilepath)
-		cc.notifier.Notify("Can't find configuration!",
-			fmt.Sprintf("%s must be in the same directory as deej. Please re-launch", userConfigFilepath))
-
-		return fmt.Errorf("config file doesn't exist: %s", userConfigFilepath)
-	}
+	cc.logger.Debugw("Loading config", "name", userConfigName)
 
 	// load the user config
 	if err := cc.userConfig.ReadInConfig(); err != nil {
 		cc.logger.Warnw("Viper failed to read user config", "error", err)
 
+		// if it's just missing, show a specific error
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			cc.notifier.Notify("Can't find configuration!",
+				fmt.Sprintf("%s.yaml must be in the same directory as deej (or in ~/.config/deej on Linux). Please re-launch", userConfigName))
+
+			return fmt.Errorf("config file doesn't exist: %w", err)
+		}
+
 		// if the error is yaml-format-related, show a sensible error. otherwise, show 'em to the logs
 		if strings.Contains(err.Error(), "yaml:") {
 			cc.notifier.Notify("Invalid configuration!",
-				fmt.Sprintf("Please make sure %s is in a valid YAML format.", userConfigFilepath))
+				fmt.Sprintf("Please make sure %s.yaml is in a valid YAML format.", userConfigName))
 		} else {
 			cc.notifier.Notify("Error loading configuration!", "Please check deej's logs for more details.")
 		}
 
 		return fmt.Errorf("read user config: %w", err)
 	}
+
+	cc.logger.Debugw("User config loaded", "path", cc.userConfig.ConfigFileUsed())
 
 	// load the internal config - this doesn't have to exist, so it can error
 	if err := cc.internalConfig.ReadInConfig(); err != nil {
@@ -149,6 +155,11 @@ func (cc *CanonicalConfig) Load() error {
 		"invertSliders", cc.InvertSliders)
 
 	return nil
+}
+
+// UserConfigPath returns the actual path to the loaded user configuration file
+func (cc *CanonicalConfig) UserConfigPath() string {
+	return cc.userConfig.ConfigFileUsed()
 }
 
 // SubscribeToChanges allows external components to receive updates when the config is reloaded
